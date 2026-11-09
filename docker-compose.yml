@@ -1,0 +1,48 @@
+# Local development: Postgres only (API services will be added by the team).
+# Usage:
+#   echo 'devpassword' > secrets/db_password.txt
+#   docker compose up -d db
+#   docker compose --profile seed run --rm seed     # optional dev sample data
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: taskapp
+      POSTGRES_DB: taskapp
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets:
+      - db_password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "127.0.0.1:5432:5432"   # local dev only; remove in production
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taskapp -d taskapp"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  seed:
+    image: postgres:16
+    profiles: ["seed"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGUSER: taskapp
+      PGDATABASE: taskapp
+      PGPASSWORD_FILE: /run/secrets/db_password
+    secrets:
+      - db_password
+    volumes:
+      - ./db/seed:/seed:ro
+    entrypoint: ["bash", "-c", "PGPASSWORD=$$(cat $$PGPASSWORD_FILE) psql -v ON_ERROR_STOP=1 -f /seed/001_dev_seed.sql"]
+
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt
+
+volumes:
+  pgdata:
