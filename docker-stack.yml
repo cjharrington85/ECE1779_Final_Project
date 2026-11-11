@@ -29,7 +29,7 @@ services:
         constraints:
           - node.role == manager   # the volume is attached to the manager only
       restart_policy:
-        condition: on-failure
+        condition: any   # Postgres exits 0 on a clean shutdown (e.g. host reboot); on-failure would not restart it
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U taskapp -d taskapp"]
       interval: 10s
