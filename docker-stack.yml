@@ -36,6 +36,33 @@ services:
       timeout: 5s
       retries: 5
 
+  # Daily pg_dump to DigitalOcean Spaces (03:00 UTC). Build the image on the manager first:
+  #   docker build -t taskapp-backup:latest ./backup
+  backup:
+    image: taskapp-backup:latest
+    environment:
+      PGHOST: db
+      PGUSER: taskapp
+      PGDATABASE: taskapp
+      PGPASSWORD_FILE: /run/secrets/db_password
+      SPACES_KEY_FILE: /run/secrets/spaces_key
+      SPACES_SECRET_FILE: /run/secrets/spaces_secret
+      SPACES_BUCKET: ece1779-task-db-backups
+      SPACES_ENDPOINT: https://tor1.digitaloceanspaces.com
+    secrets:
+      - db_password
+      - spaces_key
+      - spaces_secret
+    networks:
+      - backend
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager   # image is built locally on the manager
+      restart_policy:
+        condition: any
+
 networks:
   backend:
     driver: overlay
@@ -44,6 +71,10 @@ networks:
 secrets:
   db_password:
     file: ./secrets/db_password.txt
+  spaces_key:
+    file: ./secrets/spaces_key.txt
+  spaces_secret:
+    file: ./secrets/spaces_secret.txt
 
 configs:
   schema:
