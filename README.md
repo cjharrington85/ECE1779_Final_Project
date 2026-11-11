@@ -51,4 +51,42 @@ Schema changes only apply on a fresh data directory. To re-run the schema locall
 
 ### Backups
 
-[backup/](backup/) contains `backup.sh` (`pg_dump` to DigitalOcean Spaces, 14-day retention) and `restore.sh` (restores the latest or a named backup; destructive). Not yet tested against a live database or Spaces.
+Implemented in [backup/](backup/) and run as the `backup` service in [docker-stack.yml](docker-stack.yml).
+
+- **Schedule:** daily at 03:00 UTC (override with `BACKUP_CRON`). Each run does `pg_dump -Fc`, checks the archive with `pg_restore --list`, and uploads it to the `ece1779-task-db-backups` DigitalOcean Spaces bucket under `backups/`.
+- **Retention:** backups older than 14 days are deleted (`BACKUP_RETENTION_DAYS`).
+- **Credentials:** the database password and Spaces key/secret are Docker secrets. They are never committed (`secrets/` is git-ignored).
+- **Restore:** `restore.sh [backup-file]` restores the latest or a named backup. It drops and recreates existing objects. To rehearse safely, restore into a scratch database (set `PGDATABASE=restore_test`) instead of the live one.
+- **Status:** a backup and a restore into a scratch database have been tested on the manager. The first scheduled run and a real retention deletion have not yet been observed.
+
+One-off backup or restore on the manager (the `backup` image is built locally there):
+
+```
+docker run --rm --network taskapp-db_backend -v /root/taskapp/secrets:/run/secrets:ro \
+  -e PGHOST=db -e PGUSER=taskapp -e PGDATABASE=taskapp -e PGPASSWORD_FILE=/run/secrets/db_password.txt \
+  -e SPACES_KEY_FILE=/run/secrets/spaces_key.txt -e SPACES_SECRET_FILE=/run/secrets/spaces_secret.txt \
+  -e SPACES_BUCKET=ece1779-task-db-backups -e SPACES_ENDPOINT=https://tor1.digitaloceanspaces.com \
+  taskapp-backup:latest now                      # add: --entrypoint restore.sh   to restore
+```
+
+## Deployment (DigitalOcean, Docker Swarm)
+
+Two Droplets form the swarm: `ece1779-swarm-manager` (159.89.114.78) and `ece1779-swarm-worker` (138.197.156.189).
+
+The database stack is [docker-stack.yml](docker-stack.yml), deployed as `taskapp-db`:
+
+- **`db`:** PostgreSQL 16, one replica, pinned to the manager (`node.role == manager`) because the Block Storage Volume is attached only there. Data is bind-mounted from `/mnt/volume_tor1_1794236977286/postgres-data`. The volume is mounted through `/etc/fstab` (UUID, `nofail`) so it survives reboots. The schema is loaded from a Swarm config on first start only.
+- **`backup`:** see Backups above.
+- **Network:** both services use the `taskapp-db_backend` overlay network. No ports are published, so Postgres is reachable only from services on that network. API services should join it (it is `attachable`).
+- **Restart policy:** `condition: any`. Postgres exits 0 on a clean shutdown, which `on-failure` would not restart.
+
+Deploy or update from the manager, in `/root/taskapp` (contains `docker-stack.yml`, `db/init/`, `backup/` and `secrets/`):
+
+```
+docker build -t taskapp-backup:latest ./backup       # only when backup/ changes
+docker stack deploy -c docker-stack.yml taskapp-db
+```
+
+Required files in `secrets/` on the manager: `db_password.txt`, `spaces_key.txt`, `spaces_secret.txt`. Docker secrets are immutable: to rotate one, remove the stack, update the file, and redeploy.
+
+Verified: data survives removing and redeploying the service and rebooting the manager, and the database restarts on its own.
