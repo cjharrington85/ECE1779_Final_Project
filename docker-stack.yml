@@ -1,0 +1,50 @@
+# Docker Swarm stack: PostgreSQL on the manager node, data on the DO Block Storage Volume.
+# Deploy from the manager (run from the repo root so the relative paths resolve):
+#   echo -n '<strong-password>' | docker secret create db_password -   # or use secrets/db_password.txt below
+#   docker stack deploy -c docker-stack.yml taskapp
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: taskapp
+      POSTGRES_DB: taskapp
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets:
+      - db_password
+    configs:
+      - source: schema
+        target: /docker-entrypoint-initdb.d/001_schema.sql
+    volumes:
+      # Block Storage Volume mounted on the manager Droplet. Must already exist
+      # (swarm will fail the task rather than create it, which is what we want).
+      - type: bind
+        source: /mnt/volume_tor1_1794236977286/postgres-data
+        target: /var/lib/postgresql/data
+    networks:
+      - backend
+    # No published ports: only services on the `backend` overlay network can reach it.
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager   # the volume is attached to the manager only
+      restart_policy:
+        condition: on-failure
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taskapp -d taskapp"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  backend:
+    driver: overlay
+    attachable: true   # allows one-off `docker run --network` for backup/restore/psql
+
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt
+
+configs:
+  schema:
+    file: ./db/init/001_schema.sql
