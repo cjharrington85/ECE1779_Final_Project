@@ -48,6 +48,7 @@ router.get(
 // Create a task
 router.post(
   "/projects/:projectId",
+  validateProjectId,
   authorizeTask("member"),
   validateTask,
   async (req, res) => {
@@ -69,6 +70,7 @@ router.post(
 /* Update a task */
 router.patch(
   "/:taskId",
+  validateTaskId,
   authorizeTask("member"),
   validateTask,
   async (req, res) => {
@@ -88,19 +90,24 @@ router.patch(
 );
 
 /* Delete a task */
-router.delete("/:taskId", authorizeTask("admin"), async (req, res) => {
-  try {
-    const task = await taskService.deleteTask(req.params.taskId, req.body);
+router.delete(
+  "/:taskId",
+  validateTaskId,
+  authorizeTask("admin"),
+  async (req, res) => {
+    try {
+      const task = await taskService.deleteTask(req.params.taskId, req.body);
 
-    if (!task) {
-      return res.status(404).json({ error: "Task not found" });
+      if (!task) {
+        return res.status(404).json({ error: "Task not found" });
+      }
+
+      return res.status(200).json(task);
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Internal server error" });
     }
-
-    return res.status(200).json(task);
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: "Internal server error" });
-  }
-});
+  },
+);
 
 module.exports = router;
