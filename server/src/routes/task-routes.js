@@ -1,13 +1,18 @@
 const express = require("express");
 const taskService = require("../services/task-service");
 const authorizeTask = require("../middleware/task-authorization");
-const validateTask = require("../middleware/task-validation");
+const {
+  validateProjectId,
+  validateTaskId,
+  validateTask,
+} = require("../middleware/task-validation");
 
 const router = express.Router();
 
 /* Get all tasks in a project */
 router.get(
   "/projects/:projectId",
+  validateProjectId,
   authorizeTask("member"),
   async (req, res) => {
     try {
@@ -20,26 +25,32 @@ router.get(
   },
 );
 
-router.get("/:taskId", authorizeTask("member"), async (req, res) => {
-  try {
-    const task = await taskService.getTaskById(req.params.taskId);
+router.get(
+  "/:taskId",
+  validateTaskId,
+  authorizeTask("member"),
+  async (req, res) => {
+    try {
+      const task = await taskService.getTaskById(req.params.taskId);
 
-    if (!task) {
-      return res.status(404).json({ error: "Task not found" });
+      if (!task) {
+        return res.status(404).json({ error: "Task not found" });
+      }
+
+      return res.status(200).json(task);
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Internal server error" });
     }
-
-    return res.status(200).json(task);
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: "Internal server error" });
-  }
-});
+  },
+);
 
 // Create a task
 router.post(
   "/projects/:projectId",
+  validateProjectId,
   authorizeTask("member"),
-  validateTask(),
+  validateTask,
   async (req, res) => {
     try {
       const task = await taskService.createTask(
@@ -59,8 +70,9 @@ router.post(
 /* Update a task */
 router.patch(
   "/:taskId",
+  validateTaskId,
   authorizeTask("member"),
-  validateTask(),
+  validateTask,
   async (req, res) => {
     try {
       const task = await taskService.updateTask(req.params.taskId, req.body);
@@ -78,19 +90,24 @@ router.patch(
 );
 
 /* Delete a task */
-router.delete("/:taskId", authorizeTask("admin"), async (req, res) => {
-  try {
-    const task = await taskService.deleteTask(req.params.taskId, req.body);
+router.delete(
+  "/:taskId",
+  validateTaskId,
+  authorizeTask("admin"),
+  async (req, res) => {
+    try {
+      const task = await taskService.deleteTask(req.params.taskId, req.body);
 
-    if (!task) {
-      return res.status(404).json({ error: "Task not found" });
+      if (!task) {
+        return res.status(404).json({ error: "Task not found" });
+      }
+
+      return res.status(200).json(task);
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Internal server error" });
     }
-
-    return res.status(200).json(task);
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: "Internal server error" });
-  }
-});
+  },
+);
 
 module.exports = router;

@@ -19,18 +19,19 @@ const getTaskById = async (taskId) => {
 
 /* Create a task */
 const createTask = async (projectId, data, userId) => {
-  const { title, description, priority, assignee_id, due_date } = data;
+  const { title, description, priority, status, assignee_id, due_date } = data;
 
   const result = await pool.query(
     `INSERT INTO tasks
-      (project_id, title, description, priority, assignee_id, due_date, created_by)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      (project_id, title, description, priority, status, assignee_id, due_date, created_by)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *`,
     [
       projectId,
       title,
       description ?? "",
       priority ?? "medium",
+      status ?? "todo",
       assignee_id ?? null,
       due_date ?? null,
       userId,
