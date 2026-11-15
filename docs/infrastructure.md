@@ -225,3 +225,103 @@ A larger production deployment could use additional manager nodes and database r
 **Ishmam Ahmed:** DigitalOcean Droplet provisioning, server preparation, Docker installation, Docker Swarm configuration, container placement testing, persistent storage setup, Spaces bucket provisioning, and application deployment infrastructure.
 
 **Cameron Harding:** PostgreSQL schema, database deployment, automated backups and recovery, and real-time collaboration components.
+
+## 11. DigitalOcean Cloud Firewall Configuration
+
+### Overview
+
+A DigitalOcean Cloud Firewall was configured to protect both Droplets while maintaining Docker Swarm communication and application accessibility.
+
+**Configured by:** Ishmam Ahmed
+
+**Firewall name:** `ece1779-swarm-firewall`
+
+The firewall is attached to both:
+- `ece1779-swarm-manager`
+- `ece1779-swarm-worker`
+
+### Inbound Firewall Rules
+
+| Protocol | Port | Allowed Sources | Purpose |
+|---|---|---|---|
+| TCP | 22 | All IPv4/IPv6 | SSH administration |
+| TCP | All ports | 10.118.0.2/32, 10.118.0.3/32 | Private communication between Droplets |
+| UDP | All ports | 10.118.0.2/32, 10.118.0.3/32 | Private Docker Swarm networking |
+| TCP | 80 | All IPv4/IPv6 | HTTP application access |
+| TCP | 443 | All IPv4/IPv6 | HTTPS application access |
+
+The private IP addresses are:
+
+- Manager: `10.118.0.2`
+- Worker: `10.118.0.3`
+
+The private IP rules allow Docker Swarm communication, including cluster management and overlay networking.
+
+SSH is currently permitted from all IP addresses to avoid disrupting team access. Future deployments could restrict SSH to trusted administrator IP addresses.
+
+HTTP and HTTPS are permitted for future application deployment.
+
+PostgreSQL port 5432 is not explicitly opened to the public internet.
+
+### Outbound Firewall Rules
+
+The default outbound rules were retained:
+
+- ICMP: Allowed
+- TCP: All ports allowed
+- UDP: All ports allowed
+
+These rules support outbound connectivity for package downloads, container image downloads, and DigitalOcean Spaces backups.
+
+### Firewall Verification
+
+After activating the firewall, the following checks were performed.
+
+**1. SSH connectivity**
+
+Fresh SSH sessions were successfully established from the administrator's computer to both Droplets.
+
+**Result:** Passed.
+
+**2. Docker Swarm cluster health**
+
+The following command was executed on the manager:
+
+```bash
+docker node ls
+```
+
+Both nodes reported `Ready` status and `Active` availability.
+
+The manager remained the cluster Leader.
+
+**Result:** Passed.
+
+**3. PostgreSQL and backup services**
+
+The following commands were executed:
+
+```bash
+docker service ls
+docker ps --format "table {{.Names}}\t{{.Status}}"
+```
+
+Observed results:
+
+- `taskapp-db_db`: 1/1 replicas running
+- `taskapp-db_backup`: 1/1 replicas running
+- PostgreSQL 16 container: Running and healthy
+- Backup container: Running
+
+**Result:** Passed.
+
+These checks confirmed that enabling the firewall did not interrupt the verified SSH connections, Docker Swarm node status, or running database services.
+
+Successful backup uploads, application traffic, and WebSocket communication require separate verification.
+
+### Related GitHub Issue
+
+Issue #21: Configure Application Access and Test Deployment
+
+The firewall configuration is complete. Application routing, HTTPS, and end-to-end deployment testing remain pending.
+
