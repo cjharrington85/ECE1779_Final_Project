@@ -1,4 +1,3 @@
-
 const express = require("express");
 const bcrypt = require("bcrypt");
 const pool = require("../db");
@@ -20,7 +19,8 @@ router.post("/register", async (req, res) => {
       password.length < 8
     ) {
       return res.status(400).json({
-        error: "Valid username, email, and password of at least 8 characters are required"
+        error:
+          "Valid username, email, and password of at least 8 characters are required",
       });
     }
 
@@ -39,23 +39,23 @@ router.post("/register", async (req, res) => {
       `INSERT INTO users (username, email, password_hash)
        VALUES ($1, $2, $3)
        RETURNING id, username, email, created_at`,
-      [cleanUsername, cleanEmail, passwordHash]
+      [cleanUsername, cleanEmail, passwordHash],
     );
 
     return res.status(201).json({
-      user: result.rows[0]
+      user: result.rows[0],
     });
   } catch (error) {
     // PostgreSQL unique constraint violation
     if (error.code === "23505") {
       return res.status(409).json({
-        error: "Username or email already exists"
+        error: "Username or email already exists",
       });
     }
 
     console.error("Registration failed:", error);
     return res.status(500).json({
-      error: "Internal server error"
+      error: "Internal server error",
     });
   }
 });
@@ -69,7 +69,7 @@ router.post("/login", async (req, res) => {
 
     if (typeof email !== "string" || typeof password !== "string") {
       return res.status(400).json({
-        error: "Email and password are required"
+        error: "Email and password are required",
       });
     }
 
@@ -77,42 +77,44 @@ router.post("/login", async (req, res) => {
       `SELECT id, username, email, password_hash
        FROM users
        WHERE lower(email) = lower($1)`,
-      [email.trim()]
+      [email.trim()],
     );
 
     const user = result.rows[0];
 
     if (!user || !(await bcrypt.compare(password, user.password_hash))) {
       return res.status(401).json({
-        error: "Invalid email or password"
+        error: "Invalid email or password",
       });
     }
 
-    if (!process.env.JWT_SECRET ||
-        process.env.JWT_SECRET === "replace-with-a-long-random-secret-before-testing-login") {
+    if (
+      !process.env.JWT_SECRET ||
+      process.env.JWT_SECRET ===
+        "replace-with-a-long-random-secret-before-testing-login"
+    ) {
       return res.status(500).json({
-        error: "Authentication is not configured"
+        error: "Authentication is not configured",
       });
     }
 
-    const token = jwt.sign(
-      { id: String(user.id) },
-      process.env.JWT_SECRET,
-      { expiresIn: "1h", algorithm: "HS256" }
-    );
+    const token = jwt.sign({ id: String(user.id) }, process.env.JWT_SECRET, {
+      expiresIn: "1h",
+      algorithm: "HS256",
+    });
 
     return res.status(200).json({
       token,
       user: {
         id: user.id,
         username: user.username,
-        email: user.email
-      }
+        email: user.email,
+      },
     });
   } catch (error) {
     console.error("Login failed:", error);
     return res.status(500).json({
-      error: "Internal server error"
+      error: "Internal server error",
     });
   }
 });

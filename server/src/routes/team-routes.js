@@ -1,4 +1,3 @@
-
 const express = require("express");
 const pool = require("../db");
 const authenticate = require("../middleware/auth");
@@ -18,7 +17,7 @@ router.post("/", async (req, res, next) => {
     name.trim().length > 100
   ) {
     return res.status(400).json({
-      error: "Team name must be between 1 and 100 characters"
+      error: "Team name must be between 1 and 100 characters",
     });
   }
   let client;
@@ -32,7 +31,7 @@ router.post("/", async (req, res, next) => {
       `INSERT INTO teams (name, created_by)
        VALUES ($1, $2)
        RETURNING id, name, created_by, created_at`,
-      [name.trim(), req.user.id]
+      [name.trim(), req.user.id],
     );
 
     const team = teamResult.rows[0];
@@ -41,26 +40,26 @@ router.post("/", async (req, res, next) => {
     await client.query(
       `INSERT INTO team_members (team_id, user_id, role)
        VALUES ($1, $2, 'admin')`,
-      [team.id, req.user.id]
+      [team.id, req.user.id],
     );
 
     await client.query("COMMIT");
 
     return res.status(201).json({ team });
   } catch (error) {
-  if (client) {
-    try {
-      await client.query("ROLLBACK");
-    } catch (rollbackError) {
-      console.error("Rollback failed:", rollbackError);
+    if (client) {
+      try {
+        await client.query("ROLLBACK");
+      } catch (rollbackError) {
+        console.error("Rollback failed:", rollbackError);
+      }
+    }
+    next(error);
+  } finally {
+    if (client) {
+      client.release();
     }
   }
-  next(error);
-} finally {
-  if (client) {
-    client.release();
-  }
-}
 });
 
 router.get("/", async (req, res, next) => {
@@ -76,11 +75,11 @@ router.get("/", async (req, res, next) => {
        JOIN team_members tm ON t.id = tm.team_id
        WHERE tm.user_id = $1
        ORDER BY t.created_at DESC`,
-      [req.user.id]
+      [req.user.id],
     );
 
     return res.status(200).json({
-      teams: result.rows
+      teams: result.rows,
     });
   } catch (error) {
     next(error);
@@ -92,10 +91,12 @@ router.post("/:teamId/members", async (req, res, next) => {
     const { teamId } = req.params;
     const { userId } = req.body || {};
 
-    if (!/^[1-9]\d*$/.test(teamId) ||
-        !/^[1-9]\d*$/.test(String(userId ?? ""))) {
+    if (
+      !/^[1-9]\d*$/.test(teamId) ||
+      !/^[1-9]\d*$/.test(String(userId ?? ""))
+    ) {
       return res.status(400).json({
-        error: "Valid teamId and userId are required"
+        error: "Valid teamId and userId are required",
       });
     }
 
@@ -104,12 +105,12 @@ router.post("/:teamId/members", async (req, res, next) => {
       `SELECT role
        FROM team_members
        WHERE team_id = $1 AND user_id = $2`,
-      [teamId, req.user.id]
+      [teamId, req.user.id],
     );
 
     if (adminResult.rows[0]?.role !== "admin") {
       return res.status(403).json({
-        error: "Only team admins can add members"
+        error: "Only team admins can add members",
       });
     }
 
@@ -119,22 +120,22 @@ router.post("/:teamId/members", async (req, res, next) => {
        VALUES ($1, $2, 'member')
        ON CONFLICT (team_id, user_id) DO NOTHING
        RETURNING team_id, user_id, role, joined_at`,
-      [teamId, userId]
+      [teamId, userId],
     );
 
     if (result.rows.length === 0) {
       return res.status(409).json({
-        error: "User is already a team member"
+        error: "User is already a team member",
       });
     }
 
     return res.status(201).json({
-      member: result.rows[0]
+      member: result.rows[0],
     });
   } catch (error) {
     if (error.code === "23503") {
       return res.status(404).json({
-        error: "Team or user not found"
+        error: "Team or user not found",
       });
     }
 
@@ -148,7 +149,7 @@ router.get("/:teamId/members", async (req, res, next) => {
 
     if (!/^[1-9]\d*$/.test(teamId)) {
       return res.status(400).json({
-        error: "Invalid team ID"
+        error: "Invalid team ID",
       });
     }
 
@@ -156,12 +157,12 @@ router.get("/:teamId/members", async (req, res, next) => {
     const membership = await pool.query(
       `SELECT 1 FROM team_members
        WHERE team_id = $1 AND user_id = $2`,
-      [teamId, req.user.id]
+      [teamId, req.user.id],
     );
 
     if (membership.rows.length === 0) {
       return res.status(403).json({
-        error: "You are not a member of this team"
+        error: "You are not a member of this team",
       });
     }
 
@@ -172,11 +173,11 @@ router.get("/:teamId/members", async (req, res, next) => {
        JOIN users u ON u.id = tm.user_id
        WHERE tm.team_id = $1
        ORDER BY tm.joined_at ASC`,
-      [teamId]
+      [teamId],
     );
 
     return res.status(200).json({
-      members: result.rows
+      members: result.rows,
     });
   } catch (error) {
     next(error);
@@ -187,10 +188,9 @@ router.delete("/:teamId/members/:userId", async (req, res, next) => {
   try {
     const { teamId, userId } = req.params;
 
-    if (!/^[1-9]\d*$/.test(teamId) ||
-        !/^[1-9]\d*$/.test(userId)) {
+    if (!/^[1-9]\d*$/.test(teamId) || !/^[1-9]\d*$/.test(userId)) {
       return res.status(400).json({
-        error: "Invalid team ID or user ID"
+        error: "Invalid team ID or user ID",
       });
     }
 
@@ -198,12 +198,12 @@ router.delete("/:teamId/members/:userId", async (req, res, next) => {
     const adminResult = await pool.query(
       `SELECT role FROM team_members
        WHERE team_id = $1 AND user_id = $2`,
-      [teamId, req.user.id]
+      [teamId, req.user.id],
     );
 
     if (adminResult.rows[0]?.role !== "admin") {
       return res.status(403).json({
-        error: "Only team admins can remove members"
+        error: "Only team admins can remove members",
       });
     }
 
@@ -212,18 +212,18 @@ router.delete("/:teamId/members/:userId", async (req, res, next) => {
       `DELETE FROM team_members
        WHERE team_id = $1 AND user_id = $2 AND role = 'member'
        RETURNING team_id, user_id`,
-      [teamId, userId]
+      [teamId, userId],
     );
 
     if (result.rows.length === 0) {
       return res.status(404).json({
-        error: "Member not found or cannot remove an admin"
+        error: "Member not found or cannot remove an admin",
       });
     }
 
     return res.status(200).json({
       message: "Team member removed successfully",
-      member: result.rows[0]
+      member: result.rows[0],
     });
   } catch (error) {
     next(error);
