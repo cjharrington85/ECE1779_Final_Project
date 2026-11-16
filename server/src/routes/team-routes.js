@@ -92,7 +92,7 @@ router.post("/:teamId/members", async (req, res, next) => {
     const { teamId } = req.params;
     const { userId } = req.body || {};
 
-    if (!isValidId(teamId) || !isValidId(userId)) {
+    if (!isValidId(teamId) || !isValidId(String(userId ?? ""))) {
       return res.status(400).json({
         error: "Valid teamId and userId are required",
       });
