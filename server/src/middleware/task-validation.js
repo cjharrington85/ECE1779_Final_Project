@@ -1,8 +1,9 @@
 const pool = require("../db");
+const { isValidId, isValidDate } = require("../utils/validation");
 
 const validateProjectId = async (req, res, next) => {
   // Validate project ID format
-  if (!/^[1-9]\d*$/.test(req.params.projectId)) {
+  if (!isValidId(req.params.projectId)) {
     return res.status(400).json({ error: "Invalid project ID" });
   }
 
@@ -18,7 +19,7 @@ const validateProjectId = async (req, res, next) => {
 };
 
 const validateTaskId = (req, res, next) => {
-  if (!/^[1-9]\d*$/.test(req.params.taskId)) {
+  if (!isValidId(req.params.taskId)) {
     return res.status(400).json({ error: "Invalid task ID" });
   }
 
@@ -27,6 +28,8 @@ const validateTaskId = (req, res, next) => {
 
 const validateTask = async (req, res, next) => {
   try {
+    const body = req.body || {};
+
     // Reject unknown fields
     const allowedFields = [
       "title",
@@ -37,12 +40,16 @@ const validateTask = async (req, res, next) => {
       "due_date",
     ];
 
-    if (Object.keys(req.body).some((key) => !allowedFields.includes(key))) {
+    if (Object.keys(body).some((key) => !allowedFields.includes(key))) {
       return res.status(400).json({ error: "Unknown task field" });
     }
 
+    if (req.method === "PATCH" && Object.keys(body).length === 0) {
+      return res.status(400).json({ error: "Empty request body" });
+    }
+
     const { title, description, priority, status, assignee_id, due_date } =
-      req.body;
+      body;
 
     const validPriorities = ["low", "medium", "high", "urgent"];
     const validStatus = ["todo", "in_progress", "done"];
@@ -122,11 +129,7 @@ const validateTask = async (req, res, next) => {
     }
 
     // Validate due date
-    if (
-      due_date !== undefined &&
-      due_date !== null &&
-      (typeof due_date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(due_date))
-    ) {
+    if (due_date !== undefined && due_date !== null && !isValidDate(due_date)) {
       return res.status(400).json({ error: "Invalid due date" });
     }
 
