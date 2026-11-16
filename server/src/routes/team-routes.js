@@ -1,6 +1,7 @@
 const express = require("express");
 const pool = require("../db");
 const authenticate = require("../middleware/auth");
+const { isValidId } = require("../utils/validation");
 
 const router = express.Router();
 
@@ -91,10 +92,7 @@ router.post("/:teamId/members", async (req, res, next) => {
     const { teamId } = req.params;
     const { userId } = req.body || {};
 
-    if (
-      !/^[1-9]\d*$/.test(teamId) ||
-      !/^[1-9]\d*$/.test(String(userId ?? ""))
-    ) {
+    if (!isValidId(teamId) || !isValidId(userId)) {
       return res.status(400).json({
         error: "Valid teamId and userId are required",
       });

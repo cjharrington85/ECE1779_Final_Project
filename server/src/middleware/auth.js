@@ -1,4 +1,5 @@
 const jwt = require("jsonwebtoken");
+const { isValidId } = require("../utils/validation");
 
 function authenticate(req, res, next) {
   const authorization = req.headers.authorization;
@@ -19,6 +20,13 @@ function authenticate(req, res, next) {
     const decoded = jwt.verify(token, process.env.JWT_SECRET, {
       algorithms: ["HS256"],
     });
+
+    // Validate user ID in JWT payload
+    if (!isValidId(decoded.id)) {
+      return res.status(401).json({
+        error: "Invalid token",
+      });
+    }
 
     // Alex's task middleware expects req.user.id
     req.user = {
