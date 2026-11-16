@@ -1,5 +1,6 @@
 const express = require("express");
 const taskRoutes = require("./routes/task-routes");
+const projectRoutes = require("./routes/project-routes");
 const authRoutes = require("./routes/auth-routes");
 const userRoutes = require("./routes/user-routes");
 const authenticate = require("./middleware/auth");
@@ -19,8 +20,9 @@ app.use("/api/auth", authRoutes);
 // Orin's user management APIs
 app.use("/api/users", userRoutes);
 
-// Alex's task APIs, protected by authentication
+// Task and project APIs, protected by authentication
 app.use("/api/tasks", authenticate, taskRoutes);
+app.use("/api/projects", authenticate, projectRoutes);
 
 // Team management APIs
 app.use("/api/teams", teamRoutes);
