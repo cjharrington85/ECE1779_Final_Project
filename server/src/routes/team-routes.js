@@ -145,7 +145,7 @@ router.get("/:teamId/members", async (req, res, next) => {
   try {
     const { teamId } = req.params;
 
-    if (!/^[1-9]\d*$/.test(teamId)) {
+    if (!isValidId(teamId)) {
       return res.status(400).json({
         error: "Invalid team ID",
       });
@@ -186,7 +186,7 @@ router.delete("/:teamId/members/:userId", async (req, res, next) => {
   try {
     const { teamId, userId } = req.params;
 
-    if (!/^[1-9]\d*$/.test(teamId) || !/^[1-9]\d*$/.test(userId)) {
+    if (!isValidId(teamId) || !isValidId(userId)) {
       return res.status(400).json({
         error: "Invalid team ID or user ID",
       });
@@ -233,9 +233,9 @@ router.patch("/:teamId", async (req, res, next) => {
     const { teamId } = req.params;
     const { name } = req.body || {};
 
-    if (!/^[1-9]\d*$/.test(teamId)) {
+    if (!isValidId(teamId)) {
       return res.status(400).json({
-        error: "Invalid team ID"
+        error: "Invalid team ID",
       });
     }
 
@@ -245,7 +245,7 @@ router.patch("/:teamId", async (req, res, next) => {
       name.trim().length > 100
     ) {
       return res.status(400).json({
-        error: "Team name must be between 1 and 100 characters"
+        error: "Team name must be between 1 and 100 characters",
       });
     }
 
@@ -261,17 +261,17 @@ router.patch("/:teamId", async (req, res, next) => {
              AND role = 'admin'
          )
        RETURNING id, name, created_by, created_at`,
-      [name.trim(), teamId, req.user.id]
+      [name.trim(), teamId, req.user.id],
     );
 
     if (result.rows.length === 0) {
       return res.status(403).json({
-        error: "Team not found or admin access required"
+        error: "Team not found or admin access required",
       });
     }
 
     return res.status(200).json({
-      team: result.rows[0]
+      team: result.rows[0],
     });
   } catch (error) {
     next(error);
@@ -282,9 +282,9 @@ router.delete("/:teamId", async (req, res, next) => {
   try {
     const { teamId } = req.params;
 
-    if (!/^[1-9]\d*$/.test(teamId)) {
+    if (!isValidId(teamId)) {
       return res.status(400).json({
-        error: "Invalid team ID"
+        error: "Invalid team ID",
       });
     }
 
@@ -299,18 +299,18 @@ router.delete("/:teamId", async (req, res, next) => {
              AND role = 'admin'
          )
        RETURNING id, name`,
-      [teamId, req.user.id]
+      [teamId, req.user.id],
     );
 
     if (result.rows.length === 0) {
       return res.status(403).json({
-        error: "Team not found or admin access required"
+        error: "Team not found or admin access required",
       });
     }
 
     return res.status(200).json({
       message: "Team deleted successfully",
-      team: result.rows[0]
+      team: result.rows[0],
     });
   } catch (error) {
     next(error);
