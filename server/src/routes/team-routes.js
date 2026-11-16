@@ -228,4 +228,93 @@ router.delete("/:teamId/members/:userId", async (req, res, next) => {
   }
 });
 
+router.patch("/:teamId", async (req, res, next) => {
+  try {
+    const { teamId } = req.params;
+    const { name } = req.body || {};
+
+    if (!/^[1-9]\d*$/.test(teamId)) {
+      return res.status(400).json({
+        error: "Invalid team ID"
+      });
+    }
+
+    if (
+      typeof name !== "string" ||
+      name.trim().length === 0 ||
+      name.trim().length > 100
+    ) {
+      return res.status(400).json({
+        error: "Team name must be between 1 and 100 characters"
+      });
+    }
+
+    // Only team admins can update the team
+    const result = await pool.query(
+      `UPDATE teams
+       SET name = $1
+       WHERE id = $2
+         AND EXISTS (
+           SELECT 1 FROM team_members
+           WHERE team_id = $2
+             AND user_id = $3
+             AND role = 'admin'
+         )
+       RETURNING id, name, created_by, created_at`,
+      [name.trim(), teamId, req.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(403).json({
+        error: "Team not found or admin access required"
+      });
+    }
+
+    return res.status(200).json({
+      team: result.rows[0]
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete("/:teamId", async (req, res, next) => {
+  try {
+    const { teamId } = req.params;
+
+    if (!/^[1-9]\d*$/.test(teamId)) {
+      return res.status(400).json({
+        error: "Invalid team ID"
+      });
+    }
+
+    // Only team admins can delete their team
+    const result = await pool.query(
+      `DELETE FROM teams
+       WHERE id = $1
+         AND EXISTS (
+           SELECT 1 FROM team_members
+           WHERE team_id = $1
+             AND user_id = $2
+             AND role = 'admin'
+         )
+       RETURNING id, name`,
+      [teamId, req.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(403).json({
+        error: "Team not found or admin access required"
+      });
+    }
+
+    return res.status(200).json({
+      message: "Team deleted successfully",
+      team: result.rows[0]
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;

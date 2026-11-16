@@ -1,7 +1,9 @@
+
 const jwt = require("jsonwebtoken");
+const pool = require("../db");
 const { isValidId } = require("../utils/validation");
 
-function authenticate(req, res, next) {
+async function authenticate(req, res, next) {
   const authorization = req.headers.authorization;
 
   if (!authorization || !authorization.startsWith("Bearer ")) {
@@ -21,14 +23,26 @@ function authenticate(req, res, next) {
       algorithms: ["HS256"],
     });
 
-    // Validate user ID in JWT payload
+    // Validate the user ID inside the token
     if (!isValidId(decoded.id)) {
       return res.status(401).json({
         error: "Invalid token",
       });
     }
 
-    // Alex's task middleware expects req.user.id
+    // Confirm the user still exists in PostgreSQL
+    const result = await pool.query(
+      "SELECT id FROM users WHERE id = $1",
+      [decoded.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({
+        error: "User account no longer exists",
+      });
+    }
+
+    // Make the user ID available to protected routes
     req.user = {
       id: decoded.id,
     };
