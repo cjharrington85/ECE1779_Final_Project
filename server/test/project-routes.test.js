@@ -17,10 +17,27 @@ const projectUrl = "/api/projects/1";
 const collectionUrl = `${projectUrl}/tasks`;
 
 testEndpointAccess([
-  { method: "GET", url: "/api/projects/:id/tasks", id: "1", resource: "Project" },
-  { method: "POST", url: "/api/projects/:id/tasks", id: "1", resource: "Project", body: { title: "Created" } },
+  {
+    method: "GET",
+    url: "/api/projects/:id/tasks",
+    id: "1",
+    resource: "Project",
+  },
+  {
+    method: "POST",
+    url: "/api/projects/:id/tasks",
+    id: "1",
+    resource: "Project",
+    body: { title: "Created" },
+  },
   { method: "GET", url: "/api/projects/:id", id: "1", resource: "Project" },
-  { method: "PATCH", url: "/api/projects/:id", id: "1", resource: "Project", body: { name: "Changed" } },
+  {
+    method: "PATCH",
+    url: "/api/projects/:id",
+    id: "1",
+    resource: "Project",
+    body: { name: "Changed" },
+  },
   { method: "DELETE", url: "/api/projects/:id", id: "1", resource: "Project" },
 ]);
 
@@ -30,7 +47,93 @@ test("GET project tasks returns only tasks in that project and supports empty li
   assertTaskShape(tasks[0]);
   assert.equal(tasks[0].id, "1");
   assert.equal(tasks[0].project_id, "1");
-  assert.deepEqual(await request("GET", "/api/projects/2/tasks", 200, { user: member }), []);
+  assert.deepEqual(
+    await request("GET", "/api/projects/2/tasks", 200, { user: member }),
+    [],
+  );
+});
+
+test("GET project tasks searches titles and descriptions with case-insensitive full-text matching", async () => {
+  const tasks = await request("GET", collectionUrl, 200, { user: member });
+  for (const keyword of ["PRIMARY", "descriptions", '"task description"']) {
+    const query = new URLSearchParams({ keyword });
+    assert.deepEqual(
+      await request("GET", `${collectionUrl}?${query}`, 200, { user: member }),
+      tasks,
+    );
+  }
+
+  assert.deepEqual(
+    await request("GET", `${collectionUrl}?keyword=other`, 200),
+    [],
+  );
+});
+
+test("GET project tasks filters by assignee and combines filters with AND", async () => {
+  const [original] = await request("GET", collectionUrl, 200);
+  const otherAssignee = await request("POST", collectionUrl, 201, {
+    body: { title: "Primary follow-up", assignee_id: admin },
+  });
+  const otherKeyword = await request("POST", collectionUrl, 201, {
+    body: { title: "Review", assignee_id: member },
+  });
+  await request("POST", collectionUrl, 201, {
+    body: { title: "Primary unassigned" },
+  });
+
+  const assigneeQuery = `${collectionUrl}?assignee_id=${member}`;
+  const assigned = await request("GET", assigneeQuery, 200, { user: member });
+  assert.deepEqual(assigned, [otherKeyword, original]);
+  assert.deepEqual(
+    await request("GET", `${assigneeQuery}&keyword=primary`, 200),
+    [original],
+  );
+  assert.deepEqual(
+    await request(
+      "GET",
+      `${collectionUrl}?assignee_id=${admin}&keyword=primary`,
+      200,
+    ),
+    [otherAssignee],
+  );
+  assert.deepEqual(
+    await request("GET", `${assigneeQuery}&keyword=missing`, 200),
+    [],
+  );
+  assert.deepEqual(
+    await request("GET", `${collectionUrl}?assignee_id=${outsider}`, 200),
+    [],
+  );
+});
+
+test("GET project tasks validates filter inputs", async () => {
+  for (const invalidId of [
+    "",
+    "abc",
+    "0",
+    "-1",
+    overflowId,
+    "1&assignee_id=2",
+  ]) {
+    const response = await request(
+      "GET",
+      `${collectionUrl}?assignee_id=${invalidId}`,
+      400,
+    );
+    assert.deepEqual(response, { error: "Invalid assignee ID" });
+  }
+
+  for (const query of ["keyword=first&keyword=second", "keyword=%00"]) {
+    assert.deepEqual(await request("GET", `${collectionUrl}?${query}`, 400), {
+      error: "Invalid keyword",
+    });
+  }
+});
+
+test("GET project tasks enforces authentication and team membership with filters", async () => {
+  const url = `${collectionUrl}?keyword=primary&assignee_id=${member}`;
+  await request("GET", url, 401, { user: null });
+  await request("GET", url, 403, { user: outsider });
 });
 
 test("POST project tasks lets a member create a task with defaults and persists it", async () => {
@@ -61,15 +164,20 @@ test("GET project returns the same public fields to members and admins", async (
 test("PATCH project requires an admin and preserves fields omitted from the request", async () => {
   const before = await request("GET", projectUrl, 200);
   const body = { name: "Team's renamed project" };
-  assert.deepEqual(await request("PATCH", projectUrl, 403, { user: member, body }), {
-    error: "Admin permission required",
-  });
+  assert.deepEqual(
+    await request("PATCH", projectUrl, 403, { user: member, body }),
+    {
+      error: "Admin permission required",
+    },
+  );
   assert.deepEqual(await request("GET", projectUrl, 200), before);
   const renamed = await request("PATCH", projectUrl, 200, { body });
   assertProjectShape(renamed);
   assert.deepEqual(renamed, { ...before, ...body });
 
-  const cleared = await request("PATCH", projectUrl, 200, { body: { description: "" } });
+  const cleared = await request("PATCH", projectUrl, 200, {
+    body: { description: "" },
+  });
   assert.deepEqual(cleared, { ...renamed, description: "" });
   assert.deepEqual(await request("GET", projectUrl, 200), cleared);
 });
@@ -106,7 +214,9 @@ test("POST project tasks rejects invalid bodies without creating a task", async 
   });
   for (const [fields, error] of invalidTaskFields) {
     const body = { title: "Would be created", ...fields };
-    assert.deepEqual(await request("POST", collectionUrl, 400, { body }), { error });
+    assert.deepEqual(await request("POST", collectionUrl, 400, { body }), {
+      error,
+    });
   }
   assert.deepEqual(await request("GET", collectionUrl, 200), before);
 });
@@ -123,7 +233,9 @@ test("PATCH project rejects invalid bodies without changing the project", async 
     [{ description: "invalid\0text" }, "Invalid description"],
     [{ team_id: "2" }, "Unknown project field"],
   ]) {
-    assert.deepEqual(await request("PATCH", projectUrl, 400, { body }), { error });
+    assert.deepEqual(await request("PATCH", projectUrl, 400, { body }), {
+      error,
+    });
   }
   assert.deepEqual(await request("GET", projectUrl, 200), before);
 });
