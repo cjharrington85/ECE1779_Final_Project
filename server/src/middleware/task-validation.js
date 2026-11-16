@@ -92,7 +92,7 @@ const validateTask = async (req, res, next) => {
         (typeof assignee_id === "number" &&
           Number.isSafeInteger(assignee_id) &&
           assignee_id > 0) ||
-        (typeof assignee_id === "string" && /^[1-9]\d*$/.test(assignee_id))
+        (typeof assignee_id === "string" && isValidId(assignee_id))
       )) {
         return res.status(400).json({ error: "Invalid assignee ID" });
       }

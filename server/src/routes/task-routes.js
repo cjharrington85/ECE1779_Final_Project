@@ -2,28 +2,11 @@ const express = require("express");
 const taskService = require("../services/task-service");
 const authorizeTask = require("../middleware/task-authorization");
 const {
-  validateProjectId,
   validateTaskId,
   validateTask,
 } = require("../middleware/task-validation");
 
 const router = express.Router();
-
-/* Get all tasks in a project */
-router.get(
-  "/projects/:projectId",
-  validateProjectId,
-  authorizeTask("member"),
-  async (req, res) => {
-    try {
-      const tasks = await taskService.getTasks(req.params.projectId);
-      return res.status(200).json(tasks);
-    } catch (err) {
-      console.error(err);
-      return res.status(500).json({ error: "Internal server error" });
-    }
-  },
-);
 
 router.get(
   "/:taskId",
@@ -38,28 +21,6 @@ router.get(
       }
 
       return res.status(200).json(task);
-    } catch (err) {
-      console.error(err);
-      return res.status(500).json({ error: "Internal server error" });
-    }
-  },
-);
-
-// Create a task
-router.post(
-  "/projects/:projectId",
-  validateProjectId,
-  authorizeTask("member"),
-  validateTask,
-  async (req, res) => {
-    try {
-      const task = await taskService.createTask(
-        req.params.projectId,
-        req.body,
-        req.user.id,
-      );
-
-      return res.status(201).json(task);
     } catch (err) {
       console.error(err);
       return res.status(500).json({ error: "Internal server error" });
