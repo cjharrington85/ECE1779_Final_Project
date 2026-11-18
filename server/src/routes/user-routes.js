@@ -1,12 +1,11 @@
 
 const express = require("express");
 const pool = require("../db");
-const authenticate = require("../middleware/auth");
 
 const router = express.Router();
 
 // Get logged-in user's profile
-router.get("/me", authenticate, async (req, res, next) => {
+router.get("/me", async (req, res, next) => {
   try {
     const result = await pool.query(
       `SELECT id, username, email, created_at
@@ -30,7 +29,7 @@ router.get("/me", authenticate, async (req, res, next) => {
 });
 
 // Update logged-in user's profile
-router.patch("/me", authenticate, async (req, res, next) => {
+router.patch("/me", async (req, res, next) => {
   try {
     const { username, email } = req.body || {};
 
@@ -89,7 +88,7 @@ router.patch("/me", authenticate, async (req, res, next) => {
 });
 
 // Delete logged-in user's account
-router.delete("/me", authenticate, async (req, res, next) => {
+router.delete("/me", async (req, res, next) => {
   try {
     // Prevent admins from deleting accounts while managing teams
     const result = await pool.query(
