@@ -7,6 +7,7 @@ const {
   validateTask,
 } = require("../middleware/task-validation");
 const { authorizeProject } = require("../middleware/project-authorization");
+const { isValidId } = require("../utils/validation");
 
 const router = express.Router();
 
@@ -16,8 +17,23 @@ router.get(
   validateProjectId,
   authorizeTask("member"),
   async (req, res) => {
+    const { keyword, assignee_id } = req.query;
+    if (assignee_id !== undefined && !isValidId(assignee_id)) {
+      return res.status(400).json({ error: "Invalid assignee ID" });
+    }
+
+    if (
+      keyword !== undefined &&
+      (typeof keyword !== "string" || keyword.includes("\0"))
+    ) {
+      return res.status(400).json({ error: "Invalid keyword" });
+    }
+
     try {
-      const tasks = await taskService.getTasks(req.params.projectId);
+      const tasks = await taskService.getTasks(req.params.projectId, {
+        keyword,
+        assigneeId: assignee_id,
+      });
       return res.status(200).json(tasks);
     } catch (err) {
       console.error(err);

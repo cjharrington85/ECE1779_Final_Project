@@ -1,10 +1,23 @@
 const pool = require("../db");
 
-/* Get all tasks in a project */
-const getTasks = async (projectId) => {
+/* Get tasks in a project with optional filters */
+const getTasks = async (projectId, { keyword, assigneeId } = {}) => {
+  const params = [projectId];
+  const conditions = ["project_id = $1"];
+
+  if (keyword !== undefined) {
+    params.push(keyword);
+    conditions.push(`search @@ websearch_to_tsquery('english', $${params.length})`);
+  }
+
+  if (assigneeId !== undefined) {
+    params.push(assigneeId);
+    conditions.push(`assignee_id = $${params.length}`);
+  }
+
   const result = await pool.query(
-    "SELECT * FROM tasks WHERE project_id = $1 ORDER BY created_at DESC",
-    [projectId],
+    `SELECT * FROM tasks WHERE ${conditions.join(" AND ")} ORDER BY created_at DESC`,
+    params,
   );
   return result.rows;
 };
