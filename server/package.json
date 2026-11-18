@@ -4,9 +4,11 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "node --test test/task-routes.test.js test/project-routes.test.js",
+    "test": "node --test test/task-routes.test.js test/project-routes.test.js test/team-routes.test.js test/user-routes.test.js",
     "test:task": "node --test test/task-routes.test.js",
-    "test:project": "node --test test/project-routes.test.js"
+    "test:project": "node --test test/project-routes.test.js",
+    "test:team": "node --test test/team-routes.test.js",
+    "test:user": "node --test test/user-routes.test.js"
   },
   "keywords": [],
   "author": "",

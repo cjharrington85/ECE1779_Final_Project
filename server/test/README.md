@@ -25,8 +25,12 @@ With PostgreSQL running, select a suite from the repository root.
 export TEST_DB_PORT=55432 TEST_DB_PASSWORD=route-test-password
 npm --prefix server run test:task
 npm --prefix server run test:project
+npm --prefix server run test:team
+npm --prefix server run test:user
 ```
 
 The Task suite covers the single-task routes. The Project suite covers project
 routes and the task collection under `/api/projects/:projectId/tasks`.
-`npm --prefix server test` still runs both suites.
+The Team suite covers team management, membership, and admin permissions.
+The User suite covers profile updates, account deletion, and JWT rejection
+after account deletion. `npm --prefix server test` runs all four suites.

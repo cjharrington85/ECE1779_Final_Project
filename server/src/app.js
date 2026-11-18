@@ -14,17 +14,17 @@ app.get("/health", (_, res) => {
   res.json({ status: "ok" });
 });
 
-// Orin's registration and login APIs
+// Registration and login APIs (public)
 app.use("/api/auth", authRoutes);
 
-// Orin's user management APIs
-app.use("/api/users", userRoutes);
+// User management APIs (authentication required)
+app.use("/api/users", authenticate, userRoutes);
 
-// Task and project APIs, protected by authentication
+// Task and project APIs (authentication required)
 app.use("/api/tasks", authenticate, taskRoutes);
 app.use("/api/projects", authenticate, projectRoutes);
 
-// Team management APIs
-app.use("/api/teams", teamRoutes);
+// Team management APIs (authentication required)
+app.use("/api/teams", authenticate, teamRoutes);
 
 module.exports = app;
