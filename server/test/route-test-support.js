@@ -101,6 +101,10 @@ beforeEach(async () => {
   `);
 });
 
+function tokenFor(user) {
+  return jwt.sign({ id: user }, jwtSecret);
+}
+
 async function request(
   method,
   url,
@@ -109,7 +113,7 @@ async function request(
 ) {
   const headers = {};
   if (user !== null || token !== undefined) {
-    headers.Authorization = `Bearer ${token ?? jwt.sign({ id: user }, jwtSecret)}`;
+    headers.Authorization = `Bearer ${token ?? tokenFor(user)}`;
   }
   if (body !== undefined) {
     headers["Content-Type"] = "application/json";
@@ -164,24 +168,27 @@ function assertTaskShape(task) {
   ]);
 }
 
+async function queryRows(sql, params) {
+  const { rows } = await pool.query(sql, params);
+  return rows;
+}
+
+function testEndpointAuthentication(method, url, body, label = url) {
+  test(`${method} ${label} requires a valid JWT`, async () => {
+    assert.deepEqual(await request(method, url, 401, { user: null, body }), {
+      error: "Authentication required",
+    });
+    assert.deepEqual(await request(method, url, 401, { token: "invalid", body }), {
+      error: "Invalid or expired token",
+    });
+  });
+}
+
 function testEndpointAccess(endpoints) {
   for (const { method, url, id, resource, body } of endpoints) {
     const existingUrl = url.replace(":id", id);
 
-    test(`${method} ${url} requires a valid JWT`, async () => {
-      assert.deepEqual(
-        await request(method, existingUrl, 401, { user: null, body }),
-        {
-          error: "Authentication required",
-        },
-      );
-      assert.deepEqual(
-        await request(method, existingUrl, 401, { token: "invalid", body }),
-        {
-          error: "Invalid or expired token",
-        },
-      );
-    });
+    testEndpointAuthentication(method, existingUrl, body, url);
 
     test(`${method} ${url} rejects invalid IDs and reports missing resources`, async () => {
       for (const invalidId of ["abc", "0", "-1", overflowId]) {
@@ -230,9 +237,13 @@ module.exports = {
   member,
   outsider,
   request,
+  tokenFor,
+  queryRows,
   assertProjectShape,
   assertTaskShape,
   testEndpointAccess,
+  testEndpointAuthentication,
   invalidTaskFields,
   overflowId,
+  missingId,
 };
