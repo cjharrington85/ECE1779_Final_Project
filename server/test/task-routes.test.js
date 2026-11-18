@@ -14,7 +14,13 @@ const collectionUrl = "/api/projects/1/tasks";
 
 testEndpointAccess([
   { method: "GET", url: "/api/tasks/:id", id: "1", resource: "Task" },
-  { method: "PATCH", url: "/api/tasks/:id", id: "1", resource: "Task", body: { title: "Changed" } },
+  {
+    method: "PATCH",
+    url: "/api/tasks/:id",
+    id: "1",
+    resource: "Task",
+    body: { title: "Changed" },
+  },
   { method: "DELETE", url: "/api/tasks/:id", id: "1", resource: "Task" },
 ]);
 
@@ -54,7 +60,10 @@ test("DELETE task requires an admin and removes the task from its project", asyn
 
 test("PATCH task rejects invalid bodies without changing the task", async () => {
   const before = await request("GET", taskUrl, 200);
-  for (const [body, error] of [[{}, "Empty request body"], ...invalidTaskFields]) {
+  for (const [body, error] of [
+    [{}, "Empty request body"],
+    ...invalidTaskFields,
+  ]) {
     assert.deepEqual(await request("PATCH", taskUrl, 400, { body }), { error });
   }
   assert.deepEqual(await request("GET", taskUrl, 200), before);

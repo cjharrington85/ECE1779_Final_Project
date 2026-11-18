@@ -101,7 +101,12 @@ beforeEach(async () => {
   `);
 });
 
-async function request(method, url, expectedStatus, { user = admin, body, token } = {}) {
+async function request(
+  method,
+  url,
+  expectedStatus,
+  { user = admin, body, token } = {},
+) {
   const headers = {};
   if (user !== null || token !== undefined) {
     headers.Authorization = `Bearer ${token ?? jwt.sign({ id: user }, jwtSecret)}`;
@@ -110,32 +115,52 @@ async function request(method, url, expectedStatus, { user = admin, body, token 
     headers["Content-Type"] = "application/json";
   }
 
-  const response = await fetch(`http://127.0.0.1:${server.address().port}${url}`, {
-    method,
-    headers,
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(5000),
-  });
+  const response = await fetch(
+    `http://127.0.0.1:${server.address().port}${url}`,
+    {
+      method,
+      headers,
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(5000),
+    },
+  );
   const text = await response.text();
   assert.equal(
     response.status,
     expectedStatus,
     `${method} ${url} returned ${response.status}; expected ${expectedStatus}. ${text.slice(0, 250)}`,
   );
-  assert.match(response.headers.get("content-type") ?? "", /^application\/json\b/);
+  assert.match(
+    response.headers.get("content-type") ?? "",
+    /^application\/json\b/,
+  );
   return JSON.parse(text);
 }
 
 function assertProjectShape(project) {
   assert.deepEqual(Object.keys(project).sort(), [
-    "created_at", "description", "id", "name", "team_id",
+    "created_at",
+    "description",
+    "id",
+    "name",
+    "team_id",
   ]);
 }
 
 function assertTaskShape(task) {
   assert.deepEqual(Object.keys(task).sort(), [
-    "assignee_id", "created_at", "created_by", "description", "due_date", "id",
-    "priority", "project_id", "search", "status", "title", "updated_at",
+    "assignee_id",
+    "created_at",
+    "created_by",
+    "description",
+    "due_date",
+    "id",
+    "priority",
+    "project_id",
+    "search",
+    "status",
+    "title",
+    "updated_at",
   ]);
 }
 
@@ -144,28 +169,47 @@ function testEndpointAccess(endpoints) {
     const existingUrl = url.replace(":id", id);
 
     test(`${method} ${url} requires a valid JWT`, async () => {
-      assert.deepEqual(await request(method, existingUrl, 401, { user: null, body }), {
-        error: "Authentication required",
-      });
-      assert.deepEqual(await request(method, existingUrl, 401, { token: "invalid", body }), {
-        error: "Invalid or expired token",
-      });
+      assert.deepEqual(
+        await request(method, existingUrl, 401, { user: null, body }),
+        {
+          error: "Authentication required",
+        },
+      );
+      assert.deepEqual(
+        await request(method, existingUrl, 401, { token: "invalid", body }),
+        {
+          error: "Invalid or expired token",
+        },
+      );
     });
 
     test(`${method} ${url} rejects invalid IDs and reports missing resources`, async () => {
       for (const invalidId of ["abc", "0", "-1", overflowId]) {
-        const response = await request(method, url.replace(":id", invalidId), 400, { body });
-        assert.deepEqual(response, { error: `Invalid ${resource.toLowerCase()} ID` });
+        const response = await request(
+          method,
+          url.replace(":id", invalidId),
+          400,
+          { body },
+        );
+        assert.deepEqual(response, {
+          error: `Invalid ${resource.toLowerCase()} ID`,
+        });
       }
-      assert.deepEqual(await request(method, url.replace(":id", missingId), 404, { body }), {
-        error: `${resource} not found`,
-      });
+      assert.deepEqual(
+        await request(method, url.replace(":id", missingId), 404, { body }),
+        {
+          error: `${resource} not found`,
+        },
+      );
     });
 
     test(`${method} ${url} denies an admin from a different team`, async () => {
-      assert.deepEqual(await request(method, existingUrl, 403, { user: outsider, body }), {
-        error: "Access denied",
-      });
+      assert.deepEqual(
+        await request(method, existingUrl, 403, { user: outsider, body }),
+        {
+          error: "Access denied",
+        },
+      );
     });
   }
 }
