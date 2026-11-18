@@ -24,7 +24,7 @@ app.use("/api/users", authenticate, userRoutes);
 app.use("/api/tasks", authenticate, taskRoutes);
 app.use("/api/projects", authenticate, projectRoutes);
 
-// Team management APIs (authentication handled in team-routes.js)
-app.use("/api/teams", teamRoutes);
+// Team management APIs (authentication required)
+app.use("/api/teams", authenticate, teamRoutes);
 
 module.exports = app;

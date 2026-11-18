@@ -1,12 +1,8 @@
 const express = require("express");
 const pool = require("../db");
-const authenticate = require("../middleware/auth");
 const { isValidId } = require("../utils/validation");
 
 const router = express.Router();
-
-// All team routes require authentication
-router.use(authenticate);
 
 // Create a team
 router.post("/", async (req, res, next) => {
