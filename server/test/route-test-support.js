@@ -178,9 +178,12 @@ function testEndpointAuthentication(method, url, body, label = url) {
     assert.deepEqual(await request(method, url, 401, { user: null, body }), {
       error: "Authentication required",
     });
-    assert.deepEqual(await request(method, url, 401, { token: "invalid", body }), {
-      error: "Invalid or expired token",
-    });
+    assert.deepEqual(
+      await request(method, url, 401, { token: "invalid", body }),
+      {
+        error: "Invalid or expired token",
+      },
+    );
   });
 }
 
@@ -233,6 +236,7 @@ const invalidTaskFields = [
 ];
 
 module.exports = {
+  getServer: () => server,
   admin,
   member,
   outsider,
