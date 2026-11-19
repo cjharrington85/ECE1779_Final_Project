@@ -159,3 +159,113 @@ test("committed task changes reach only authorized subscribers across replicas",
   assert.deepEqual(unexpected, []);
   assert.deepEqual(blocked, []);
 });
+
+// Keep one listener for the whole burst: separate once() calls can miss messages
+// delivered in the same event-loop turn. The timeout only bounds a failed test.
+function collectMessages(ws, count) {
+  return new Promise((resolve, reject) => {
+    const messages = [];
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error(`Expected ${count} messages, received ${messages.length}`));
+    }, 3000);
+    function cleanup() {
+      clearTimeout(timer);
+      ws.off("message", onMessage);
+    }
+    function onMessage(data) {
+      messages.push(JSON.parse(data.toString()));
+      if (messages.length === count) {
+        cleanup();
+        resolve(messages);
+      }
+    }
+    ws.on("message", onMessage);
+  });
+}
+
+test("back-to-back auth, subscription and reauthentication preserve message order", async (t) => {
+  await setup(t);
+  const ws = await connect(t);
+  const messages = [
+    { type: "auth", token: tokenFor(member) },
+    { type: "subscribe", project_id: "1" },
+    { type: "unsubscribe" },
+    { type: "auth", token: tokenFor(outsider) },
+    { type: "subscribe", project_id: "1" },
+    { type: "subscribe", project_id: "3" },
+    { type: "auth", token: "invalid" },
+    { type: "subscribe", project_id: "3" },
+    { type: "auth", token: tokenFor(admin) },
+    { type: "subscribe", project_id: "1" },
+  ];
+  const responses = collectMessages(ws, messages.length);
+  // Deliberately do not await acknowledgements between messages.
+  for (const message of messages) ws.send(JSON.stringify(message));
+  assert.deepEqual(await responses, [
+    { type: "authenticated" },
+    { type: "subscribed", project_id: "1" },
+    { type: "unsubscribed" },
+    { type: "authenticated" },
+    { type: "error", error: "Access denied" },
+    { type: "subscribed", project_id: "3" },
+    { type: "error", error: "Authentication failed" },
+    { type: "error", error: "Authentication required" },
+    { type: "authenticated" },
+    { type: "subscribed", project_id: "1" },
+  ]);
+  const connection = [...wss.clients][0];
+  assert.equal(connection.userId, admin);
+  assert.equal(connection.projectId, "1");
+});
+
+test("task notifications stay in order when the first membership query is slow", async (t) => {
+  await setup(t);
+  const ws = await connect(t);
+  await subscribe(ws, member);
+  const pool = require("../src/db");
+  const originalQuery = pool.query.bind(pool);
+  let releaseFirst;
+  let markEntered;
+  const gate = new Promise((resolve) => { releaseFirst = resolve; });
+  const entered = new Promise((resolve) => { markEntered = resolve; });
+  let membershipQueries = 0;
+  t.mock.method(pool, "query", async (sql, params) => {
+    if (sql === "SELECT user_id FROM team_members WHERE team_id = $1") {
+      membershipQueries++;
+      if (membershipQueries === 1) {
+        markEntered();
+        await gate;
+      }
+      // Isolate scheduling from database timing after the first query is gated.
+      return { rows: [{ user_id: member }] };
+    }
+    return originalQuery(sql, params);
+  });
+
+  const events = ["INSERT", "UPDATE", "DELETE"].map((op) => ({
+    op, task_id: 101, project_id: 1, team_id: 1,
+  }));
+  const received = collectMessages(ws, events.length);
+  // Handle a timeout even if an earlier assertion fails.
+  received.catch(() => {});
+  try {
+    // Inject at the pg notification boundary to control arrival order precisely.
+    listener.emit("notification", {
+      channel: "task_events", payload: JSON.stringify(events[0]),
+    });
+    await entered;
+    for (const event of events.slice(1)) {
+      listener.emit("notification", {
+        channel: "task_events", payload: JSON.stringify(event),
+      });
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+    // Later notifications must not start their queries while the first waits.
+    assert.equal(membershipQueries, 1);
+  } finally {
+    releaseFirst();
+  }
+  assert.deepEqual(await received, events);
+  assert.equal(membershipQueries, events.length);
+});
