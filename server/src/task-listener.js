@@ -51,6 +51,15 @@ async function startTaskListener(wss) {
           )
             return;
 
+          const projectId = String(event.project_id);
+          const isSubscribed = (ws) =>
+            ws.readyState === WebSocket.OPEN &&
+            ws.userId &&
+            (ws.expiresAt === null || Date.now() < ws.expiresAt) &&
+            ws.projectId === projectId;
+
+          if (![...wss.clients].some(isSubscribed)) return;
+
           // Recheck current membership so removed members stop receiving events.
           const result = await pool.query(
             "SELECT user_id FROM team_members WHERE team_id = $1",
@@ -60,13 +69,7 @@ async function startTaskListener(wss) {
             result.rows.map((row) => String(row.user_id)),
           );
           for (const ws of wss.clients) {
-            if (
-              ws.readyState === WebSocket.OPEN &&
-              ws.userId &&
-              (ws.expiresAt === null || Date.now() < ws.expiresAt) &&
-              members.has(String(ws.userId)) &&
-              ws.projectId === String(event.project_id)
-            ) {
+            if (isSubscribed(ws) && members.has(String(ws.userId))) {
               ws.send(msg.payload);
             }
           }

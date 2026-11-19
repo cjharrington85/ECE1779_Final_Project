@@ -328,3 +328,50 @@ test("unauthenticated connections time out and successful auth cancels the deadl
   assert.equal(authenticated.readyState, WebSocket.OPEN);
   assert.equal((await send(authenticated, { type: "unsubscribe" })).type, "unsubscribed");
 });
+
+
+test("membership queries only run for projects with active local subscribers", async (t) => {
+  await setup(t);
+  const { pool } = require("../src/db");
+  const query = t.mock.method(pool, "query");
+  const membershipQueries = () => query.mock.calls.filter(
+    ({ arguments: args }) => args[0] === "SELECT user_id FROM team_members WHERE team_id = $1",
+  );
+  const notify = (projectId) => listener.emit("notification", {
+    channel: "task_events",
+    payload: JSON.stringify({ op: "UPDATE", task_id: 1, project_id: projectId, team_id: 1 }),
+  });
+  // Let the listener's promise queue drain without using arbitrary sleeps.
+  const flush = () => new Promise((resolve) => setImmediate(resolve));
+
+  notify(1);
+  await flush();
+  assert.equal(membershipQueries().length, 0, "no local connections");
+
+  const ws = await connect(t);
+  notify(1);
+  await flush();
+  assert.equal(membershipQueries().length, 0, "unauthenticated connection");
+
+  await subscribe(ws, member);
+  notify(2);
+  await flush();
+  assert.equal(membershipQueries().length, 0, "only subscribed to another project");
+
+  const received = nextMessage(ws);
+  notify(1);
+  assert.equal((await received).op, "UPDATE");
+  assert.equal(membershipQueries().length, 1, "matching subscription queries membership");
+
+  const connection = [...wss.clients][0];
+  connection.expiresAt = Date.now() - 1;
+  notify(1);
+  await flush();
+  assert.equal(membershipQueries().length, 1, "expired authentication");
+  connection.expiresAt = null;
+
+  await send(ws, { type: "unsubscribe" });
+  notify(1);
+  await flush();
+  assert.equal(membershipQueries().length, 1, "unsubscribed connection");
+});
