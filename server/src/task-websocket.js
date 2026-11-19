@@ -13,10 +13,40 @@ function send(ws, message) {
 function attachTaskWebSocket(server) {
   const wss = new WebSocket.Server({ server, maxPayload: 16 * 1024 });
 
+  const heartbeat = setInterval(() => {
+    for (const ws of wss.clients) {
+      if (!ws.isAlive) {
+        ws.terminate();
+        continue;
+      }
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.isAlive = false;
+        ws.ping();
+      }
+    }
+  }, 30_000);
+  heartbeat.unref();
+  wss.on("close", () => clearInterval(heartbeat));
+
   wss.on("connection", (ws) => {
     ws.userId = null;
     ws.projectId = null;
     ws.expiresAt = null;
+    ws.isAlive = true;
+    ws.on("pong", () => {
+      ws.isAlive = true;
+    });
+
+    let authTimer;
+    function requireAuthentication() {
+      if (authTimer || ws.readyState !== WebSocket.OPEN) return;
+      authTimer = setTimeout(() => {
+        ws.terminate();
+      }, 10_000);
+      authTimer.unref();
+    }
+    requireAuthentication();
+    ws.on("close", () => clearTimeout(authTimer));
     ws.on("error", (error) => console.error("WebSocket error:", error.message));
 
     async function handleMessage(data) {
@@ -35,6 +65,7 @@ function attachTaskWebSocket(server) {
         ws.userId = null;
         ws.projectId = null;
         ws.expiresAt = null;
+        requireAuthentication();
         try {
           const decoded = jwt.verify(message.token, process.env.JWT_SECRET, {
             algorithms: ["HS256"],
@@ -49,6 +80,11 @@ function attachTaskWebSocket(server) {
           if (!result.rows.length) {
             throw new Error("User no longer exists");
           }
+          if (ws.readyState !== WebSocket.OPEN) {
+            return;
+          }
+          clearTimeout(authTimer);
+          authTimer = null;
           ws.userId = decoded.id;
           ws.expiresAt = decoded.exp == null ? null : decoded.exp * 1000;
           return send(ws, { type: "authenticated" });
@@ -60,6 +96,7 @@ function attachTaskWebSocket(server) {
       if (!ws.userId || (ws.expiresAt !== null && Date.now() >= ws.expiresAt)) {
         ws.userId = null;
         ws.projectId = null;
+        requireAuthentication();
         return send(ws, { type: "error", error: "Authentication required" });
       }
 

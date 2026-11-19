@@ -28,8 +28,8 @@ async function setup(t) {
   });
 }
 
-async function connect(t) {
-  const ws = new WebSocket(`ws://127.0.0.1:${getServer().address().port}`);
+async function connect(t, options) {
+  const ws = new WebSocket(`ws://127.0.0.1:${getServer().address().port}`, options);
   t.after(() => ws.terminate());
   await once(ws, "open", { signal: AbortSignal.timeout(3000) });
   return ws;
@@ -268,4 +268,63 @@ test("task notifications stay in order when the first membership query is slow",
   }
   assert.deepEqual(await received, events);
   assert.equal(membershipQueries, events.length);
+});
+
+
+// Capture only the application timer so tests can advance it without sleeps.
+function captureTimer(t, name, delay) {
+  const original = global[name];
+  const scheduled = [];
+  t.mock.method(global, name, (callback, milliseconds, ...args) => {
+    const timer = original(callback, milliseconds, ...args);
+    if (milliseconds === delay) scheduled.push({ callback, timer });
+    return timer;
+  });
+  return scheduled;
+}
+
+test("heartbeat keeps responsive clients and terminates clients missing pong", async (t) => {
+  const timers = captureTimer(t, "setInterval", 30_000);
+  await setup(t);
+  const { callback: heartbeat, timer } = timers[0];
+  clearInterval(timer);
+  const responsive = await connect(t);
+  const responsiveConnection = [...wss.clients][0];
+  const silent = await connect(t, { autoPong: false });
+  await subscribe(responsive, member);
+  await subscribe(silent, member);
+  const silentConnection = [...wss.clients].find((ws) => ws !== responsiveConnection);
+
+  let pong = once(responsiveConnection, "pong", { signal: AbortSignal.timeout(3000) });
+  const ping = once(silent, "ping", { signal: AbortSignal.timeout(3000) });
+  heartbeat();
+  await Promise.all([pong, ping]);
+  assert.equal(responsiveConnection.isAlive, true);
+  assert.equal(silentConnection.isAlive, false);
+
+  const closed = once(silent, "close", { signal: AbortSignal.timeout(3000) });
+  const serverClosed = once(silentConnection, "close", { signal: AbortSignal.timeout(3000) });
+  pong = once(responsiveConnection, "pong", { signal: AbortSignal.timeout(3000) });
+  heartbeat();
+  await Promise.all([closed, serverClosed, pong]);
+  assert.equal(wss.clients.has(silentConnection), false);
+  assert.equal(responsive.readyState, WebSocket.OPEN);
+});
+
+test("unauthenticated connections time out and successful auth cancels the deadline", async (t) => {
+  const deadlines = captureTimer(t, "setTimeout", 10_000);
+  const clear = t.mock.method(global, "clearTimeout");
+  await setup(t);
+  const idle = await connect(t);
+  const authenticated = await connect(t);
+  assert.equal(deadlines.length, 2);
+  await subscribe(authenticated, member);
+  assert.ok(clear.mock.calls.some(({ arguments: args }) => args[0] === deadlines[1].timer));
+
+  clearTimeout(deadlines[0].timer);
+  const closed = once(idle, "close", { signal: AbortSignal.timeout(3000) });
+  deadlines[0].callback();
+  await closed;
+  assert.equal(authenticated.readyState, WebSocket.OPEN);
+  assert.equal((await send(authenticated, { type: "unsubscribe" })).type, "unsubscribed");
 });
