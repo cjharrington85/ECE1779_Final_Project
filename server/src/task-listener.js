@@ -9,13 +9,31 @@ async function startTaskListener(wss) {
     user: process.env.DB_USER || "taskapp",
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME || "taskapp",
+    keepAlive: true,
   });
 
   // Fail closed if LISTEN is lost; the process supervisor can restart the replica.
-  client.on("error", (error) => {
+  let failed = false;
+  function handleListenerFailure(error) {
+    if (failed) {
+      return;
+    }
+    failed = true;
     console.error("Task listener connection failed:", error);
-    for (const ws of wss.clients) ws.close(1011, "Task listener unavailable");
+    for (const ws of wss.clients) {
+      ws.close(1011, "Task listener unavailable");
+    }
     process.exit(1);
+  }
+
+  client.on("error", handleListenerFailure);
+  client.on("end", () => {
+    // pg sets _ending for intentional client.end(), including test teardown.
+    if (!client._ending) {
+      handleListenerFailure(
+        new Error("Task listener connection ended unexpectedly"),
+      );
+    }
   });
 
   let pending = Promise.resolve();
