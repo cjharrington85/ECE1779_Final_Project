@@ -1,0 +1,32 @@
+# Grafana Alloy: scrapes node_exporter on both Droplets and remote_writes to Grafana Cloud.
+# Prereqs: prometheus-node-exporter running on both Droplets (see docs/monitoring.md),
+# secrets/grafana_cloud_token.txt created.
+# Deploy from the manager, repo root:
+#   docker stack deploy -c docker-stack-monitoring.yml monitoring
+services:
+  alloy:
+    image: grafana/alloy:latest
+    command:
+      - run
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    configs:
+      - source: alloy_config
+        target: /etc/alloy/config.alloy
+    secrets:
+      - grafana_cloud_token
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: any
+
+configs:
+  alloy_config:
+    file: ./monitoring/config.alloy
+
+secrets:
+  grafana_cloud_token:
+    file: ./secrets/grafana_cloud_token.txt
