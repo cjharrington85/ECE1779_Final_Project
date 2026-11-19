@@ -143,11 +143,26 @@ test("committed task changes reach only authorized subscribers across replicas",
   assert.equal((await event).op, "DELETE");
 
   const blocked = [];
-  ws.on("message", (data) => blocked.push(String(data)));
-  await queryRows("DELETE FROM team_members WHERE team_id = 1 AND user_id = 2");
+  ws.on("message", (data) => {
+    if (JSON.parse(data.toString()).op) blocked.push(String(data));
+  });
+  await queryRows(
+    "DELETE FROM team_members WHERE team_id = 1 AND user_id = $1",
+    [member],
+  );
+  // A remaining member on the primary listener marks final-event processing.
+  const sentinel = await connect(t);
+  await subscribe(sentinel, admin);
+  const finalEvent = nextMessage(sentinel);
   await request("PATCH", "/api/tasks/1", 200, {
     body: { title: "After removal" },
   });
+  assert.deepEqual(await finalEvent, {
+    op: "UPDATE", task_id: 1, project_id: 1, team_id: 1,
+  });
+  // This reply follows any earlier event frames on the removed member's socket.
+  // It ensures those frames were received before we assert that none arrived.
+  assert.equal((await send(ws, { type: "unsubscribe" })).type, "unsubscribed");
   // Wait until the other replica has processed the final notification.
   for (let i = 0; i < 50 && replicaEvents.length < 4; i++) {
     await new Promise((resolve) => setTimeout(resolve, 10));
