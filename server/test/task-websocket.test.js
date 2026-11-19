@@ -223,7 +223,7 @@ test("task notifications stay in order when the first membership query is slow",
   await setup(t);
   const ws = await connect(t);
   await subscribe(ws, member);
-  const pool = require("../src/db");
+  const { pool } = require("../src/db");
   const originalQuery = pool.query.bind(pool);
   let releaseFirst;
   let markEntered;

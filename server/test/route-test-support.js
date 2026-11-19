@@ -47,7 +47,7 @@ before(async () => {
   process.env.DB_PASSWORD = password;
   process.env.DB_NAME = databaseName;
   process.env.JWT_SECRET = jwtSecret;
-  pool = require("../src/db");
+  ({ pool } = require("../src/db"));
   const schema = await readFile(
     path.join(__dirname, "../../db/init/001_schema.sql"),
     "utf8",

@@ -1,14 +1,10 @@
 const { Client } = require("pg");
 const WebSocket = require("ws");
-const pool = require("./db");
+const { pool, dbConfig } = require("./db");
 
 async function startTaskListener(wss) {
   const client = new Client({
-    host: process.env.DB_HOST || "localhost",
-    port: Number(process.env.DB_PORT || 5432),
-    user: process.env.DB_USER || "taskapp",
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME || "taskapp",
+    ...dbConfig,
     keepAlive: true,
   });
 

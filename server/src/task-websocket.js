@@ -1,6 +1,6 @@
 const jwt = require("jsonwebtoken");
 const WebSocket = require("ws");
-const pool = require("./db");
+const { pool } = require("./db");
 const { getProjectWithRole } = require("./services/project-service");
 const { isValidId } = require("./utils/validation");
 

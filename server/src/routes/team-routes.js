@@ -1,5 +1,5 @@
 const express = require("express");
-const pool = require("../db");
+const { pool } = require("../db");
 const { isValidId } = require("../utils/validation");
 
 const router = express.Router();
@@ -8,11 +8,7 @@ const router = express.Router();
 router.post("/", async (req, res, next) => {
   const { name } = req.body || {};
 
-  if (
-    typeof name !== "string" ||
-    !name.trim() ||
-    name.trim().length > 100
-  ) {
+  if (typeof name !== "string" || !name.trim() || name.trim().length > 100) {
     return res.status(400).json({
       error: "Team name must be between 1 and 100 characters",
     });
@@ -28,7 +24,7 @@ router.post("/", async (req, res, next) => {
       `INSERT INTO teams (name, created_by)
        VALUES ($1, $2)
        RETURNING id, name, created_by, created_at`,
-      [name.trim(), req.user.id]
+      [name.trim(), req.user.id],
     );
 
     const team = teamResult.rows[0];
@@ -36,7 +32,7 @@ router.post("/", async (req, res, next) => {
     await client.query(
       `INSERT INTO team_members (team_id, user_id, role)
        VALUES ($1, $2, 'admin')`,
-      [team.id, req.user.id]
+      [team.id, req.user.id],
     );
 
     await client.query("COMMIT");
@@ -65,7 +61,7 @@ router.get("/", async (req, res, next) => {
        JOIN team_members tm ON t.id = tm.team_id
        WHERE tm.user_id = $1
        ORDER BY t.created_at DESC`,
-      [req.user.id]
+      [req.user.id],
     );
 
     return res.status(200).json({
@@ -83,10 +79,7 @@ router.post("/:teamId/members", async (req, res, next) => {
     const { userId } = req.body || {};
 
     // Accept valid numeric or string user IDs
-    if (
-      !isValidId(teamId) ||
-      !isValidId(String(userId ?? ""))
-    ) {
+    if (!isValidId(teamId) || !isValidId(String(userId ?? ""))) {
       return res.status(400).json({
         error: "Valid teamId and userId are required",
       });
@@ -95,7 +88,7 @@ router.post("/:teamId/members", async (req, res, next) => {
     const adminResult = await pool.query(
       `SELECT role FROM team_members
        WHERE team_id = $1 AND user_id = $2`,
-      [teamId, req.user.id]
+      [teamId, req.user.id],
     );
 
     if (adminResult.rows[0]?.role !== "admin") {
@@ -109,7 +102,7 @@ router.post("/:teamId/members", async (req, res, next) => {
        VALUES ($1, $2, 'member')
        ON CONFLICT (team_id, user_id) DO NOTHING
        RETURNING team_id, user_id, role, joined_at`,
-      [teamId, userId]
+      [teamId, userId],
     );
 
     if (result.rows.length === 0) {
@@ -145,7 +138,7 @@ router.get("/:teamId/members", async (req, res, next) => {
     const membership = await pool.query(
       `SELECT 1 FROM team_members
        WHERE team_id = $1 AND user_id = $2`,
-      [teamId, req.user.id]
+      [teamId, req.user.id],
     );
 
     if (membership.rows.length === 0) {
@@ -161,7 +154,7 @@ router.get("/:teamId/members", async (req, res, next) => {
        JOIN users u ON u.id = tm.user_id
        WHERE tm.team_id = $1
        ORDER BY tm.joined_at ASC`,
-      [teamId]
+      [teamId],
     );
 
     return res.status(200).json({
@@ -198,7 +191,7 @@ router.patch("/:teamId/members/:userId", async (req, res, next) => {
     // Lock the team during role changes
     const team = await client.query(
       "SELECT id FROM teams WHERE id = $1 FOR UPDATE",
-      [teamId]
+      [teamId],
     );
 
     if (team.rows.length === 0) {
@@ -213,7 +206,7 @@ router.patch("/:teamId/members/:userId", async (req, res, next) => {
        WHERE team_id = $1
          AND user_id = $2
          AND role = 'admin'`,
-      [teamId, req.user.id]
+      [teamId, req.user.id],
     );
 
     if (admin.rows.length === 0) {
@@ -226,7 +219,7 @@ router.patch("/:teamId/members/:userId", async (req, res, next) => {
     const target = await client.query(
       `SELECT role FROM team_members
        WHERE team_id = $1 AND user_id = $2`,
-      [teamId, userId]
+      [teamId, userId],
     );
 
     if (target.rows.length === 0) {
@@ -237,15 +230,12 @@ router.patch("/:teamId/members/:userId", async (req, res, next) => {
     }
 
     // Protect the last administrator
-    if (
-      target.rows[0].role === "admin" &&
-      role === "member"
-    ) {
+    if (target.rows[0].role === "admin" && role === "member") {
       const count = await client.query(
         `SELECT COUNT(*)::int AS total
          FROM team_members
          WHERE team_id = $1 AND role = 'admin'`,
-        [teamId]
+        [teamId],
       );
 
       if (count.rows[0].total <= 1) {
@@ -261,7 +251,7 @@ router.patch("/:teamId/members/:userId", async (req, res, next) => {
        SET role = $1
        WHERE team_id = $2 AND user_id = $3
        RETURNING team_id, user_id, role`,
-      [role, teamId, userId]
+      [role, teamId, userId],
     );
 
     await client.query("COMMIT");
@@ -302,7 +292,7 @@ router.delete("/:teamId/members/:userId", async (req, res, next) => {
     // Lock the team during member removal
     const team = await client.query(
       "SELECT id FROM teams WHERE id = $1 FOR UPDATE",
-      [teamId]
+      [teamId],
     );
 
     if (team.rows.length === 0) {
@@ -317,7 +307,7 @@ router.delete("/:teamId/members/:userId", async (req, res, next) => {
        WHERE team_id = $1
          AND user_id = $2
          AND role = 'admin'`,
-      [teamId, req.user.id]
+      [teamId, req.user.id],
     );
 
     if (admin.rows.length === 0) {
@@ -330,7 +320,7 @@ router.delete("/:teamId/members/:userId", async (req, res, next) => {
     const target = await client.query(
       `SELECT role FROM team_members
        WHERE team_id = $1 AND user_id = $2`,
-      [teamId, userId]
+      [teamId, userId],
     );
 
     if (target.rows.length === 0) {
@@ -346,7 +336,7 @@ router.delete("/:teamId/members/:userId", async (req, res, next) => {
         `SELECT COUNT(*)::int AS total
          FROM team_members
          WHERE team_id = $1 AND role = 'admin'`,
-        [teamId]
+        [teamId],
       );
 
       if (count.rows[0].total <= 1) {
@@ -361,7 +351,7 @@ router.delete("/:teamId/members/:userId", async (req, res, next) => {
       `DELETE FROM team_members
        WHERE team_id = $1 AND user_id = $2
        RETURNING team_id, user_id, role`,
-      [teamId, userId]
+      [teamId, userId],
     );
 
     await client.query("COMMIT");
@@ -396,11 +386,7 @@ router.patch("/:teamId", async (req, res, next) => {
       });
     }
 
-    if (
-      typeof name !== "string" ||
-      !name.trim() ||
-      name.trim().length > 100
-    ) {
+    if (typeof name !== "string" || !name.trim() || name.trim().length > 100) {
       return res.status(400).json({
         error: "Team name must be between 1 and 100 characters",
       });
@@ -417,7 +403,7 @@ router.patch("/:teamId", async (req, res, next) => {
              AND role = 'admin'
          )
        RETURNING id, name, created_by, created_at`,
-      [name.trim(), teamId, req.user.id]
+      [name.trim(), teamId, req.user.id],
     );
 
     if (result.rows.length === 0) {
@@ -455,7 +441,7 @@ router.delete("/:teamId", async (req, res, next) => {
              AND role = 'admin'
          )
        RETURNING id, name`,
-      [teamId, req.user.id]
+      [teamId, req.user.id],
     );
 
     if (result.rows.length === 0) {
