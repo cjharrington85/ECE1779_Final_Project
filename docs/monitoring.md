@@ -115,3 +115,11 @@ Setup:
 4. In Grafana Cloud, import dashboard ID 1860 (Node Exporter Full).
 
 Verify: `up{job="node"}` returns 2 series equal to 1 in Grafana Explore.
+
+### Grafana alerts
+
+Rules are defined in [monitoring/alert-rules.yml](../monitoring/alert-rules.yml): CPU above 80%, memory above
+85%, disk above 85% (each for 5 minutes, matching the DigitalOcean alerts) and node_exporter down for 2 minutes.
+To load them: Grafana Cloud -> Alerting -> Alert rules -> New -> Import to Grafana-managed rules, upload the
+YAML and select the hosted Prometheus data source. Then set a default email contact point under
+Alerting -> Contact points and route notifications to it (Notification policies).
