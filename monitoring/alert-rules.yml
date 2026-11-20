@@ -1,0 +1,40 @@
+# Alert rules mirroring the DigitalOcean alerts (docs/monitoring.md), plus a node-down check.
+# Import in Grafana Cloud: Alerting -> Alert rules -> New -> "Import to Grafana-managed rules"
+# (Prometheus YAML), choosing the hosted Prometheus data source.
+groups:
+  - name: node-alerts
+    interval: 1m
+    rules:
+      - alert: HighCPUUtilization
+        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{job="node", mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CPU above 80% on {{ $labels.instance }}"
+
+      - alert: HighMemoryUtilization
+        expr: (1 - node_memory_MemAvailable_bytes{job="node"} / node_memory_MemTotal_bytes{job="node"}) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Memory above 85% on {{ $labels.instance }}"
+
+      - alert: HighDiskUtilization
+        expr: |
+          (1 - node_filesystem_avail_bytes{job="node", fstype=~"ext4|xfs", mountpoint=~"/|/mnt/volume.*"}
+             / node_filesystem_size_bytes{job="node", fstype=~"ext4|xfs", mountpoint=~"/|/mnt/volume.*"}) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk above 85% on {{ $labels.instance }} ({{ $labels.mountpoint }})"
+
+      - alert: NodeDown
+        expr: up{job="node"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "node_exporter on {{ $labels.instance }} is not being scraped"
