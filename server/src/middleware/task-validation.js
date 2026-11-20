@@ -1,4 +1,4 @@
-const pool = require("../db");
+const { pool } = require("../db");
 const { isValidId, isValidDate } = require("../utils/validation");
 
 const validateProjectId = async (req, res, next) => {

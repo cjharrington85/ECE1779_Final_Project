@@ -1,6 +1,5 @@
-
 const jwt = require("jsonwebtoken");
-const pool = require("../db");
+const { pool } = require("../db");
 const { isValidId } = require("../utils/validation");
 
 async function authenticate(req, res, next) {
@@ -31,10 +30,9 @@ async function authenticate(req, res, next) {
     }
 
     // Confirm the user still exists in PostgreSQL
-    const result = await pool.query(
-      "SELECT id FROM users WHERE id = $1",
-      [decoded.id]
-    );
+    const result = await pool.query("SELECT id FROM users WHERE id = $1", [
+      decoded.id,
+    ]);
 
     if (result.rows.length === 0) {
       return res.status(401).json({

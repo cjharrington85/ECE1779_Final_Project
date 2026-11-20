@@ -47,7 +47,7 @@ before(async () => {
   process.env.DB_PASSWORD = password;
   process.env.DB_NAME = databaseName;
   process.env.JWT_SECRET = jwtSecret;
-  pool = require("../src/db");
+  ({ pool } = require("../src/db"));
   const schema = await readFile(
     path.join(__dirname, "../../db/init/001_schema.sql"),
     "utf8",
@@ -178,9 +178,12 @@ function testEndpointAuthentication(method, url, body, label = url) {
     assert.deepEqual(await request(method, url, 401, { user: null, body }), {
       error: "Authentication required",
     });
-    assert.deepEqual(await request(method, url, 401, { token: "invalid", body }), {
-      error: "Invalid or expired token",
-    });
+    assert.deepEqual(
+      await request(method, url, 401, { token: "invalid", body }),
+      {
+        error: "Invalid or expired token",
+      },
+    );
   });
 }
 
@@ -233,6 +236,7 @@ const invalidTaskFields = [
 ];
 
 module.exports = {
+  getServer: () => server,
   admin,
   member,
   outsider,

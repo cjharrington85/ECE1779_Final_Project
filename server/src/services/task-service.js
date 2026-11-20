@@ -1,4 +1,4 @@
-const pool = require("../db");
+const { pool } = require("../db");
 
 /* Get tasks in a project with optional filters */
 const getTasks = async (projectId, { keyword, assigneeId } = {}) => {
@@ -7,7 +7,9 @@ const getTasks = async (projectId, { keyword, assigneeId } = {}) => {
 
   if (keyword !== undefined) {
     params.push(keyword);
-    conditions.push(`search @@ websearch_to_tsquery('english', $${params.length})`);
+    conditions.push(
+      `search @@ websearch_to_tsquery('english', $${params.length})`,
+    );
   }
 
   if (assigneeId !== undefined) {

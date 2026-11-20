@@ -90,3 +90,40 @@ docker stack deploy -c docker-stack.yml taskapp-db
 Required files in `secrets/` on the manager: `db_password.txt`, `spaces_key.txt`, `spaces_secret.txt`. Docker secrets are immutable: to rotate one, remove the stack, update the file, and redeploy.
 
 Verified: data survives removing and redeploying the service and rebooting the manager, and the database restarts on its own.
+
+## Real-time task updates (WebSocket)
+
+Run `npm ci` in `server`, configure `server/.env` from `.env.example` (including
+`JWT_SECRET`), then run `node src/index.js` from `server`. HTTP and WebSocket
+connections share `PORT` (default `3000`). Each API replica uses its own PostgreSQL
+`LISTEN task_events` connection, so task changes reach clients on every replica.
+The existing REST APIs and database triggers are unchanged.
+
+Connect to `ws://localhost:3000` (use `wss://` behind HTTPS), then send these JSON
+messages in order, waiting for each acknowledgement:
+
+```json
+{"type":"auth","token":"<JWT returned by login>"}
+{"type":"subscribe","project_id":"1"}
+```
+
+The server replies with `{"type":"authenticated"}` and
+`{"type":"subscribed","project_id":"1"}`. Only current members of the project's
+team may subscribe. Each connection subscribes to one project; subscribing again
+replaces the subscription. Send `{"type":"unsubscribe"}` to stop updates.
+Errors use `{"type":"error","error":"..."}`.
+
+Task changes arrive in the database event format:
+
+```json
+{"op":"UPDATE","task_id":12,"project_id":1,"team_id":1}
+```
+
+`op` is `INSERT`, `UPDATE`, or `DELETE`. Refetch the task or project task list
+through the REST API to update the UI. Deleted tasks should be removed locally.
+Expired tokens and removed team members no longer receive events.
+
+Notifications are live only: after reconnecting, authenticate, subscribe, and
+refetch the task list to recover changes missed during disconnection. If the
+PostgreSQL listener fails, the server exits and connected sockets are closed;
+the deployment's process supervisor should restart it.

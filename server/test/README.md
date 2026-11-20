@@ -34,3 +34,8 @@ routes and the task collection under `/api/projects/:projectId/tasks`.
 The Team suite covers team management, membership, and admin permissions.
 The User suite covers profile updates, account deletion, and JWT rejection
 after account deletion. `npm --prefix server test` runs all four suites.
+
+The WebSocket suite uses the same disposable database and can be run with
+`npm --prefix server run test:websocket`. It checks authentication, project
+permissions, task INSERT/UPDATE/DELETE notifications, separate replica listeners,
+and removal of a subscribed member.

@@ -1,4 +1,4 @@
-const pool = require("../db");
+const { pool } = require("../db");
 
 /* Authorize admin operations */
 const authorizeTask = (requiredRole = "member") => {

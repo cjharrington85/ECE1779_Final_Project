@@ -1,4 +1,4 @@
-const pool = require("../db");
+const { pool } = require("../db");
 const projectService = require("../services/project-service");
 const { isValidId } = require("../utils/validation");
 
