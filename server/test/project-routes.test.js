@@ -10,11 +10,115 @@ const {
   testEndpointAccess,
   invalidTaskFields,
   overflowId,
+  missingId,
+  queryRows,
+  testEndpointAuthentication,
 } = require("./route-test-support");
 
 const taskUrl = "/api/tasks/1";
 const projectUrl = "/api/projects/1";
 const collectionUrl = `${projectUrl}/tasks`;
+
+testEndpointAuthentication("POST", "/api/projects", {
+  team_id: "1",
+  name: "Created",
+});
+
+test("POST project creates and persists a project with optional description", async () => {
+  for (const body of [
+    { team_id: "1", name: "Team's new project", description: "Details'; --" },
+    { team_id: 1, name: "Default description" },
+    { team_id: "2", name: "Other team", description: "" },
+  ]) {
+    const project = await request("POST", "/api/projects", 201, {
+      user: body.team_id === "2" ? member : admin,
+      body,
+    });
+    assertProjectShape(project);
+    assert.equal(typeof project.id, "string");
+    assert.equal(project.team_id, String(body.team_id));
+    assert.equal(project.name, body.name);
+    assert.equal(project.description, body.description ?? "");
+    assert.ok(Number.isFinite(Date.parse(project.created_at)));
+    assert.deepEqual(
+      await request("GET", `/api/projects/${project.id}`, 200, {
+        user: member,
+      }),
+      project,
+    );
+  }
+});
+
+test("POST project rejects members and admins of other teams without inserting", async () => {
+  const before = await queryRows("SELECT * FROM projects ORDER BY id");
+  for (const user of [member, outsider]) {
+    assert.deepEqual(
+      await request("POST", "/api/projects", 403, {
+        user,
+        body: { team_id: "1", name: "Forbidden" },
+      }),
+      { error: "Admin permission required" },
+    );
+  }
+  assert.deepEqual(
+    await queryRows("SELECT * FROM projects ORDER BY id"),
+    before,
+  );
+});
+
+test("POST project reports nonexistent teams", async () => {
+  assert.deepEqual(
+    await request("POST", "/api/projects", 404, {
+      body: { team_id: missingId, name: "Missing team" },
+    }),
+    { error: "Team not found" },
+  );
+});
+
+test("POST project validates bodies without inserting", async () => {
+  const before = await queryRows("SELECT * FROM projects ORDER BY id");
+  const valid = { team_id: "1", name: "Valid" };
+  const cases = [
+    [undefined, "Expected a project object"],
+    [[], "Expected a project object"],
+    [{}, "Invalid team ID"],
+    [{ team_id: "1" }, "Invalid name"],
+    [{ ...valid, extra: true }, "Unknown project field"],
+  ];
+  for (const team_id of [
+    null,
+    true,
+    {},
+    [],
+    "",
+    "abc",
+    "0",
+    "-1",
+    "1.5",
+    overflowId,
+    0,
+    -1,
+    1.5,
+    Number.MAX_SAFE_INTEGER + 1,
+  ]) {
+    cases.push([{ ...valid, team_id }, "Invalid team ID"]);
+  }
+  for (const name of [null, 42, {}, [], "", "  ", "bad\0name"]) {
+    cases.push([{ ...valid, name }, "Invalid name"]);
+  }
+  for (const description of [null, 42, {}, [], "bad\0description"]) {
+    cases.push([{ ...valid, description }, "Invalid description"]);
+  }
+  for (const [body, error] of cases) {
+    assert.deepEqual(await request("POST", "/api/projects", 400, { body }), {
+      error,
+    });
+  }
+  assert.deepEqual(
+    await queryRows("SELECT * FROM projects ORDER BY id"),
+    before,
+  );
+});
 
 testEndpointAccess([
   {
