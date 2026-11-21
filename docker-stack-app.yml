@@ -12,7 +12,7 @@ services:
     environment:
       PORT: "3000"
       NODE_ENV: production
-      DB_HOST: db
+      DB_HOST: tasks.taskapp-db_db
       DB_PORT: "5432"
       DB_USER: taskapp
       DB_NAME: taskapp
