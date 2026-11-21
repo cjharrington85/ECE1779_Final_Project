@@ -11,6 +11,56 @@ const { isValidId } = require("../utils/validation");
 
 const router = express.Router();
 
+router.post("/", async (req, res) => {
+  const body = req.body;
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return res.status(400).json({ error: "Expected a project object" });
+  }
+
+  if (
+    Object.keys(body).some(
+      (field) => !["team_id", "name", "description"].includes(field),
+    )
+  ) {
+    return res.status(400).json({ error: "Unknown project field" });
+  }
+
+  const { team_id, name, description } = body;
+  const teamId =
+    typeof team_id === "number" && Number.isSafeInteger(team_id)
+      ? String(team_id)
+      : team_id;
+  if (!isValidId(teamId)) {
+    return res.status(400).json({ error: "Invalid team ID" });
+  }
+  if (typeof name !== "string" || name.trim() === "" || name.includes("\0")) {
+    return res.status(400).json({ error: "Invalid name" });
+  }
+  if (
+    description !== undefined &&
+    (typeof description !== "string" || description.includes("\0"))
+  ) {
+    return res.status(400).json({ error: "Invalid description" });
+  }
+
+  try {
+    const project = await projectService.createProject(req.user.id, {
+      ...body,
+      team_id: teamId,
+    });
+    if (!project) {
+      if (!(await projectService.teamExists(teamId))) {
+        return res.status(404).json({ error: "Team not found" });
+      }
+      return res.status(403).json({ error: "Admin permission required" });
+    }
+    return res.status(201).json(project);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 /* Get all tasks in a project */
 router.get(
   "/:projectId/tasks",
