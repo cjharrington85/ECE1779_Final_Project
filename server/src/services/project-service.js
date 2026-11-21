@@ -1,5 +1,29 @@
 const { pool } = require("../db");
 
+const teamExists = async (teamId) => {
+  const result = await pool.query("SELECT id FROM teams WHERE id = $1", [
+    teamId,
+  ]);
+  return result.rows.length > 0;
+};
+
+const createProject = async (userId, { team_id, name, description = "" }) => {
+  const result = await pool.query(
+    `INSERT INTO projects (team_id, name, description)
+     SELECT $1, $3, $4
+     WHERE EXISTS (
+       SELECT 1 FROM team_members
+       WHERE team_id = $1
+         AND user_id = $2
+         AND role = 'admin'
+     )
+     RETURNING *`,
+    [team_id, userId, name, description],
+  );
+
+  return result.rows[0] ?? null;
+};
+
 const getProjectWithRole = async (projectId, userId) => {
   const result = await pool.query(
     `SELECT p.*, tm.role
@@ -40,4 +64,10 @@ const deleteProject = async (projectId, userId) => {
   return result.rows[0] || null;
 };
 
-module.exports = { getProjectWithRole, updateProject, deleteProject };
+module.exports = {
+  teamExists,
+  createProject,
+  getProjectWithRole,
+  updateProject,
+  deleteProject,
+};
