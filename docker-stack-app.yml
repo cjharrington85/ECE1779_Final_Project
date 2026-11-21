@@ -1,20 +1,33 @@
 
 # ECE1779 Collaborative Task Management Platform
-# Node.js API deployment configuration
-# Maintained by: Ishmam Ahmed
+# Node.js API deployment on Docker Swarm
 
 services:
   api:
-    # Placeholder: replace with the actual backend image later
-    image: ghcr.io/REPLACE_WITH_OWNER/taskapp-api:latest
+    image: taskapp-api:final
 
     networks:
       - backend
 
     environment:
+      PORT: "3000"
+      NODE_ENV: production
       DB_HOST: db
       DB_PORT: "5432"
-      NODE_ENV: production
+      DB_USER: taskapp
+      DB_NAME: taskapp
+
+    secrets:
+      - db_password
+      - jwt_secret
+
+    command:
+      - /bin/sh
+      - -c
+      - |
+        export DB_PASSWORD="$$(cat /run/secrets/db_password)"
+        export JWT_SECRET="$$(cat /run/secrets/jwt_secret)"
+        exec node src/index.js
 
     deploy:
       replicas: 2
@@ -27,3 +40,11 @@ networks:
   backend:
     external: true
     name: taskapp-db_backend
+
+secrets:
+  db_password:
+    external: true
+    name: taskapp-db_db_password
+  jwt_secret:
+    external: true
+    name: taskapp-app_jwt_secret
